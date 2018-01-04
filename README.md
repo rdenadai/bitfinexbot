@@ -64,13 +64,21 @@ DO NOT CHANGE OTHER FIELDS!!
 To run the system you need to execute the following commands:
 
 ```sh
-$ rethinkdb --bind all
+$ rethinkdb --bind all --http-port 8181
 $ celery -A classes.tasks worker --loglevel=info
 $ python run_btfxwss.py
 $ python run.py
 ```
 
 Keep in mind, the each command must be executed in their own shell window... the one with bot logic is run.py.
+
+## Log file...
+It generates a log.txt in the origin folder... you can check that our for some messages.
+
+## Rethinkdb
+You can access the great web interface of rethinkdb to see how the database is been used and make changes.
+Just go to [http://localhost:8181](http://localhost:8181) after run the rethinkdb start command mentioned above.
+
 
 ## DISCLAIMER!
 
