@@ -5,11 +5,12 @@ from multiprocessing import Pool
 from functools import partial
 import ujson
 from .api.BitAPI import BitAPI
-from .RethinkDatabase import Database
-from .MachineLearning import MachineLearning
+from classes.db.RethinkDatabase import Database
+from classes.ml.MachineLearning import MachineLearning
 from .cextutils.utils import calculate_lastest_low_high, calculate_prices
-from .logger import save_logger_file, remove_logger_file
+from .logger import Logger
 from .utils import get_time
+from .tasks import save_executions
 
 
 # Keeping this global!
@@ -29,7 +30,7 @@ def trader(crypto, usd):
         ticker, trades = db.get_lastest_price(currency), []
         # This is just a precaution to not think that the value change...
         if crypto['last_id'] == ticker['id']:
-            save_logger_file('trader: last_id not equal to ticker id.')
+            Logger.save_logger_file('trader: last_id not equal to ticker id.')
             return
         else:
             crypto['last_id'] = ticker['id']
@@ -56,17 +57,17 @@ def trader(crypto, usd):
 
         # Only buy or sell if crypto is active
         if active:
-            save_logger_file(f'Last price for {currency}: {last_price} at {get_time()}')
+            Logger.save_logger_file(f'Last price for {currency}: {last_price} at {get_time()}')
             # BUY
             if c_min < last_price < c_min_max and usd > (last_price * amount):
-                save_logger_file(f'Trying to buy : {currency} for {last_price} : wait number = {crypto["wait_to_buy"]}')
+                Logger.save_logger_file(f'Trying to buy : {currency} for {last_price} : wait number = {crypto["wait_to_buy"]}')
                 if crypto['wait_to_buy'] >= 4 and should_buy:  # wait 3 times before buy...
-                    save_logger_file(f'Buying {currency} : {amount} for {last_price} at {get_time()}.')
+                    Logger.save_logger_file(f'Buying {currency} : {amount} for {last_price} at {get_time()}.')
                     executed = bfx.place_order(f'{amount}', str(last_price), 'buy', 'exchange market', currency)
                     # Limit the min price we can sell our coins...
                     # it prevents for selling for lower prices than what we bought
                     if last_price > crypto["min_price_to_sell"]:
-                        save_logger_file(f'Min price to sell {currency}: {last_price} at {get_time()}')
+                        Logger.save_logger_file(f'Min price to sell {currency}: {last_price} at {get_time()}')
                         crypto["min_price_to_sell"] = last_price
                     if executed.isdigit():
                         crypto['wait_to_buy'] = 0
@@ -75,11 +76,11 @@ def trader(crypto, usd):
                     crypto['wait_to_buy'] += 1
             # SELL
             elif last_price >= c_max and crypto['available'] > 0 and last_price >= crypto["min_price_to_sell"]:
-                save_logger_file(f'Trying to sell : {currency} for {last_price} : wait number = {crypto["wait_to_sell"]}')
+                Logger.save_logger_file(f'Trying to sell : {currency} for {last_price} : wait number = {crypto["wait_to_sell"]}')
                 # wait 2 times before sell to see if the value dont go higher
                 if crypto['wait_to_sell'] >= 1 and should_sell:
                     coin_qtd = crypto['available']
-                    save_logger_file(f'Selling {currency} : {coin_qtd} for {last_price}  at {get_time()}.')
+                    Logger.save_logger_file(f'Selling {currency} : {coin_qtd} for {last_price}  at {get_time()}.')
                     executed = bfx.place_order(f'{coin_qtd}', str(last_price), 'sell', 'exchange market', currency)
                     if executed.isdigit():
                         crypto['wait_to_sell'] = 0
@@ -101,7 +102,7 @@ def trader(crypto, usd):
             'min_price_to_sell': crypto['min_price_to_sell']
         }
     except Exception as e:
-        save_logger_file(f'Error in trader : {e}')
+        Logger.save_logger_file(f'Error in trader : {e}')
         return
 
 
@@ -121,7 +122,7 @@ class BitfinexBot():
         self.clean(_loop, _data)
 
     def clean(self, _loop, _data):
-        remove_logger_file()
+        Logger.remove_logger_file()
         # Remove old balances
         self.db.remove_balances()
         # Remove old execution
@@ -215,11 +216,10 @@ class BitfinexBot():
                         crypto['wait_to_sell'] = ucrypto['wait_to_sell']
                         crypto['min_price_to_sell'] = ucrypto['min_price_to_sell']
                         break
-
         self.update_buy_sell_values(_loop, update_bs)
-        self.db.save_executions(update_bs)
+        save_executions.delay(update_bs)
         BitfinexBot.set_message_1_text(_loop, f'update price at {get_time()}')
-        _loop.set_alarm_in(1, self.trader)
+        _loop.set_alarm_in(0.75, self.trader)
 
     def update_buy_sell_values(self, _loop, update_bs):
         updates = [
@@ -269,7 +269,6 @@ class BitfinexBot():
                     v_model = '{0:.4f}\t'.format(v_model) if v_model <= 100 else '{0:.2f}\t'.format(v_model)
                     self.__append_text(updates, v_model, tabsize=5, color=color)
                 self.__append_text(updates, f'\n', tabsize=1)
-
             BitfinexBot.set_predictions_text(_loop, updates)
         except TypeError as e:
             BitfinexBot.set_message_2_text(_loop, f'update_machine_learning_values error: {e}...')
