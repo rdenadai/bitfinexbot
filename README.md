@@ -20,11 +20,20 @@ $ sudo apt-get install redis-server
 ```
 
 #### Install bot
-> This bot needs python3.5+ to work, so be sure you have the right version, if not download [pyenv](https://github.com/pyenv/pyenv) and follow the bellow steps. 
+> This bot needs **python3.5+** (since it uses asyncio and F strings) to work, so be sure you have the right version, if not download [pyenv](https://github.com/pyenv/pyenv) and follow the bellow steps. 
 
 ```sh
 $ pip install -r requirements.txt
 ```
+
+## Compiling the Min, Min+ and Max calculus
+
+You need to compile cython code for your platform before run the bot, got to classes/cextutils and run the command bellow.
+It will recompile python code to C... trying to speed up some calculation.
+
+```sh
+$ python setup.py build_ext --inplace
+``` 
 
 ## Keys
 
@@ -63,16 +72,7 @@ $ python run.py
 
 Keep in mind, the each command must be executed in their own shell window... the one with bot logic is run.py.
 
-## Compiling the Min, Min+ and Max calculus
-
-If you need to change the calculus made by cextutils, please run the bellow command inside classes/cextutils.
-It will recompile python code to C... trying to speed up some calculation.
-
-```sh
-$ python setup.py build_ext --inplace
-``` 
-
-## DISCLAIMER
+## DISCLAIMER!
 
 This code, if run is your responsability, **i will take no part in it**... if money is lost its up to you.
 **I take no responsability for your actions**... so please, don't use this... it is solely for my personal use.
