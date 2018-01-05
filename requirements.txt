@@ -5,6 +5,7 @@ ujson==1.35
 uvloop==0.9.1
 numpy==1.13.3
 scipy==1.0.0
+pandas==0.22.0
 scikit-learn==0.19.1
 Cython==0.27.3
 btfxwss==1.1.16
