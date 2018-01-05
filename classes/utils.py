@@ -2,7 +2,11 @@
 
 import time
 import datetime
+from subprocess import call
 
+
+def beep():
+    call(["play", "-q", "static/sound/beep.mp3"])
 
 def get_time():
     timestamp = datetime.datetime.fromtimestamp(time.time())

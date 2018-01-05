@@ -23,6 +23,7 @@ $ sudo apt-get install redis-server
 > This bot needs **python3.5+** (since it uses asyncio and F strings) to work, so be sure you have the right version, if not download [pyenv](https://github.com/pyenv/pyenv) and follow the bellow steps. 
 
 ```sh
+$ sudo apt install sox libsox-fmt-all
 $ pip install -r requirements.txt
 ```
 

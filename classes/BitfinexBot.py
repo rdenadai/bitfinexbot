@@ -1,31 +1,28 @@
 #!/usr/bin/env python
 
-from subprocess import call
 from multiprocessing import Pool
 from functools import partial
 import ujson
 from .api.BitAPI import BitAPI
-from classes.db.RethinkDatabase import Database
-from classes.ml.MachineLearning import MachineLearning
+from .db.RethinkDatabase import Database
+from .ml.MachineLearning import MachineLearning
 from .cextutils.utils import calculate_lastest_low_high, calculate_prices
 from .logger import Logger
-from .utils import get_time
+from .utils import get_time, beep
 from .tasks import save_executions
+import pandas as pd
+import numpy as np
 
 
 # Keeping this global!
 bfx = BitAPI()
 
 
-def beep():
-    call(["play", "-q", "beep.mp3"])
-
-
 def trader(crypto, usd):
     db = Database()
     try:
         active = crypto['active']
-        currency = crypto['symbol']
+        currency = crypto['symbol'].upper()
         # After been loaded from threads we must get the correct value depending on currency
         ticker, trades = db.get_lastest_price(currency), []
         # This is just a precaution to not think that the value change...
@@ -42,8 +39,30 @@ def trader(crypto, usd):
         low = float(ticker['low'])
         high = float(ticker['high'])
 
+        action = 'HOLD'
+        if active:
+            data_for_macd = db.get_lastest_price_data(currency)
+            df = pd.DataFrame(data_for_macd)
+            df['26 ema'] = df['last_price'].ewm(span=26).mean()
+            df['12 ema'] = df['last_price'].ewm(span=12).mean()
+            df['MACD'] = (df['12 ema'] - df['26 ema'])
+            df['Signal Line'] = df['MACD'].ewm(span=9).mean()
+            df['Signal Line Crossover'] = np.where(df['MACD'] > df['Signal Line'], 1, 0)
+            df['Signal Line Crossover'] = np.where(df['MACD'] < df['Signal Line'], -1, df['Signal Line Crossover'])
+            df['Centerline Crossover'] = np.where(df['MACD'] > 0, 1, 0)
+            df['Centerline Crossover'] = np.where(df['MACD'] < 0, -1, df['Centerline Crossover'])
+            df['Buy Sell'] = (2 * (np.sign(df['Signal Line Crossover'] - df['Signal Line Crossover'].shift(1))))
+            macd_l = float(df['MACD'].get(len(df['MACD']) - 1))
+            macd_l2 = float(df['MACD'].get(len(df['MACD']) - 2))
+            sign_l = float(df['Signal Line'].get(len(df['Signal Line']) - 2))
+            sign_l2 = float(df['Signal Line'].get(len(df['Signal Line']) - 2))
+            if macd_l > sign_l and macd_l2 <= sign_l2:
+                action = 'BUY'
+            elif macd_l < sign_l and macd_l2 >= sign_l2:
+                action = 'SELL'
+
         # Let's get data from table to make better decisions
-        _data = db.get_lastest_price_data(currency.upper())
+        _data = db.get_lastest_price_data_to_array(currency)
 
         # Calculate a probable value low and high
         low, high = calculate_lastest_low_high(low, high, _data)
@@ -97,6 +116,7 @@ def trader(crypto, usd):
             'c_max': c_max,
             'c_mean': c_mean,
             'active': active,
+            'action': action,
             'wait_to_buy': 0 if crypto['wait_to_buy'] > 10 else crypto['wait_to_buy'],
             'wait_to_sell': 0 if crypto['wait_to_sell'] > 10 else crypto['wait_to_sell'],
             'min_price_to_sell': crypto['min_price_to_sell']
@@ -223,31 +243,34 @@ class BitfinexBot():
 
     def update_buy_sell_values(self, _loop, update_bs):
         updates = [
-            ('headers', u'Currency\t '.expandtabs(4)),
+            ('headers', u'Currency\t '.expandtabs(2)),
+            ('headers', u'Active\t'.expandtabs(9)),
+            ('headers', u'Action\t'.expandtabs(9)),
             ('headers', u'Low\t'.expandtabs(10)),
-            ('headers', u'High\t'.expandtabs(11)),
+            ('headers', u'Mean\t'.expandtabs(11)),
+            ('headers', u'High\t'.expandtabs(10)),
             ('headers', u'Price\t'.expandtabs(11)),
             ('headers', u'Min\t'.expandtabs(11)),
             ('headers', u'Min +\t'.expandtabs(11)),
-            ('headers', u'Max\t'.expandtabs(11)),
-            ('headers', u'Mean\t'.expandtabs(10)),
-            ('headers', u'Active\n'.expandtabs(5)),
+            ('headers', u'Max\n'.expandtabs(5)),
         ]
         for value in update_bs:
             active_color = 'change ' if value["active"] else 'change negative'
+            action_color = 'change ' if value["action"] == 'BUY' else 'change negative' if value["action"] == 'SELL' else 'price'
             low = value["low"]
             high = value["high"]
             v_low = '{0:.4f}\t'.format(low) if low <= 100 else '{0:.2f}\t'.format(low)
             v_high = '{0:.4f}\t'.format(high) if high <= 100 else '{0:.2f}\t'.format(high)
-            self.__append_text(updates, f'{value["currency"]}\t', tabsize=13, color='getting quote')
+            self.__append_text(updates, f'{value["currency"]}\t', tabsize=11, color='getting quote')
+            self.__append_text(updates, f'{value["active"]}\t', tabsize=9, color=active_color)
+            self.__append_text(updates, f'{value["action"]}\t', tabsize=9, color=action_color)
             self.__append_text(updates, f'{v_low}', tabsize=10)
-            self.__append_text(updates, f'{v_high}', tabsize=11)
+            self.__append_text(updates, f'{value["c_mean"]}\t', tabsize=11)
+            self.__append_text(updates, f'{v_high}', tabsize=10)
             self.__append_text(updates, f'{value["price"]}\t', tabsize=11, color='quote')
             self.__append_text(updates, f'{value["c_min"]}\t', tabsize=11, color='change negative')
             self.__append_text(updates, f'{value["c_min_max"]}\t', tabsize=11, color='price')
-            self.__append_text(updates, f'{value["c_max"]}\t', tabsize=11, color='change ')
-            self.__append_text(updates, f'{value["c_mean"]}\t', tabsize=5)
-            self.__append_text(updates, f'{value["active"]}\n', tabsize=5, color=active_color)
+            self.__append_text(updates, f'{value["c_max"]}\n', tabsize=5, color='change ')
         BitfinexBot.set_buysell_text(_loop, updates)
 
     def update_machine_learning_values(self, _loop, update_ml):

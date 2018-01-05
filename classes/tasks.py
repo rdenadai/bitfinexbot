@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 from celery import Celery
-from classes.db.RethinkDatabase import Database
+from .db.RethinkDatabase import Database
 
 
 app = Celery('tasks', broker='redis://localhost:6379/0')

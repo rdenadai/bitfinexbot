@@ -138,6 +138,10 @@ class Database():
             order_by(r.desc('timestamp')). \
             filter({'currency': currency.upper()}).\
             limit(75).run()
+        return prices
+
+    def get_lastest_price_data_to_array(self, currency):
+        prices = self.get_lastest_price_data(currency)
         x, y, last_price, pred = [], [], 0.0, []
         xapp, yapp = x.append, y.append
         for price in prices:
