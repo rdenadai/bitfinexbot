@@ -1,0 +1,21 @@
+version: "3.7"
+
+services:
+  rethinkdb:
+    container_name: bitfinex_rethinkdb
+    image: "rethinkdb:latest"
+    restart: unless-stopped
+    ports:
+      - "29015:29015"
+      - "28015:28015"
+      - "8181:8080"
+  redis:
+    container_name: bitfinex_redis
+    image: "redis:latest"
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    deploy:
+      resources:
+        limits:
+          memory: 256M

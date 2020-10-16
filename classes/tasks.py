@@ -4,7 +4,8 @@ from celery import Celery
 from .db.RethinkDatabase import Database
 
 
-app = Celery('tasks', broker='redis://localhost:6379/0')
+app = Celery("tasks", broker="redis://localhost:6379/0")
+db = Database()
 
 
 @app.task
